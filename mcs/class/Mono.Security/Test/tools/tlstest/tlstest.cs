@@ -1,4 +1,4 @@
-//
+﻿//
 // TlsTest.cs: TLS/SSL Test Program
 //
 // Author:
@@ -16,11 +16,11 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Net.Security;
 using System.Reflection;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-
-using Mono.Security.Protocol.Tls;
 
 public class TlsTest {
 
@@ -34,11 +34,9 @@ public class TlsTest {
 		Console.WriteLine ("tlstest [protocol] [class] [credentials] [--x:x509 [--x:x509]] [--time] [--show] url [...]");
 		Console.WriteLine ("{0}protocol (only applicable when using stream)", Environment.NewLine);
 		Console.WriteLine ("\t--any   \tNegotiate protocol [default]");
-		Console.WriteLine ("\t--ssl   \tUse SSLv3");
-		Console.WriteLine ("\t--ssl2  \tUse SSLv2 - unsupported on Mono");
-		Console.WriteLine ("\t--ssl3  \tUse SSLv3");
-		Console.WriteLine ("\t--tls   \tUse TLSv1");
 		Console.WriteLine ("\t--tls1  \tUse TLSv1");
+		Console.WriteLine ("\t--tls11 \tUse TLSv1");
+		Console.WriteLine ("\t--tls12 \tUse TLSv1");
 		Console.WriteLine ("{0}class", Environment.NewLine);
 		Console.WriteLine ("\t--stream\tDirectly use the SslClientStream [default]");
 		Console.WriteLine ("\t--web   \tUse the WebRequest/WebResponse classes");
@@ -55,7 +53,8 @@ public class TlsTest {
 	private static bool show;
 	private static bool time;
 	private static bool web;
-	private static Mono.Security.Protocol.Tls.SecurityProtocolType protocol = Mono.Security.Protocol.Tls.SecurityProtocolType.Default;
+	private static SecurityProtocolType? protocol = null;
+	static readonly SecurityProtocolType defaultProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
 	private static X509CertificateCollection certificates = new X509CertificateCollection ();
 	private static NetworkCredential basicCred;
 	private static NetworkCredential digestCred;
@@ -72,21 +71,16 @@ public class TlsTest {
 			switch (arg) {
 				// protocol
 				case "--any":
-					protocol = Mono.Security.Protocol.Tls.SecurityProtocolType.Default;
+					protocol = null;
 					break;
-				case "--ssl":
-				case "--ssl3":
-					protocol = Mono.Security.Protocol.Tls.SecurityProtocolType.Ssl3;
-					break;
-				case "--ssl2":
-					protocol = Mono.Security.Protocol.Tls.SecurityProtocolType.Ssl2;
-					// note: will only works with Fx 1.2
-					// but the tool doesn't link with it
-					Usage ("Not supported");
-					return;
-				case "--tls":
 				case "--tls1":
-					protocol = Mono.Security.Protocol.Tls.SecurityProtocolType.Tls;
+					protocol = SecurityProtocolType.Tls;
+					break;
+				case "--tls11":
+					protocol = SecurityProtocolType.Tls11;
+					break;
+				case "--tls12":
+					protocol = SecurityProtocolType.Tls12;
 					break;
 				// class
 				case "--stream":
@@ -167,7 +161,8 @@ public class TlsTest {
 	public static string GetWebPage (string url) 
 	{
 		ServicePointManager.CertificatePolicy = new TestCertificatePolicy ();
-		ServicePointManager.SecurityProtocol = (System.Net.SecurityProtocolType) (int) protocol;
+		if (protocol != null)
+			ServicePointManager.SecurityProtocol = protocol.Value;
 
 		Uri uri = new Uri (url);
 		HttpWebRequest req = (HttpWebRequest) WebRequest.Create (uri);
@@ -201,8 +196,8 @@ public class TlsTest {
 		Socket socket = new Socket (ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 		socket.Connect (new IPEndPoint (ip, uri.Port));
 		NetworkStream ns = new NetworkStream (socket, false);
-		SslClientStream ssl = new SslClientStream (ns, uri.Host, false, protocol, certificates);
-		ssl.ServerCertValidationDelegate += new CertificateValidationCallback (CertificateValidation);
+		var ssl = new SslStream (ns, false, CertificateValidation);
+		ssl.AuthenticateAsClient (uri.Host, certificates, (SslProtocols)(protocol ?? defaultProtocol), false);
 
 		StreamWriter sw = new StreamWriter (ssl);
 		sw.WriteLine ("GET {0} HTTP/1.0{1}", uri.AbsolutePath, Environment.NewLine);
@@ -255,6 +250,20 @@ public class TlsTest {
 				break;
 		}
 		Console.WriteLine ("Error #{0}: {1}", error, message);
+	}
+
+	static bool CertificateValidation (object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors errors)
+	{
+		if (errors != SslPolicyErrors.None) {
+			Console.WriteLine (certificate.ToString (true));
+			// X509Certificate.ToString(true) doesn't show dates :-(
+			Console.WriteLine ("\tValid From:  {0}", certificate.GetEffectiveDateString ());
+			Console.WriteLine ("\tValid Until: {0}{1}", certificate.GetExpirationDateString (), Environment.NewLine);
+			// multiple errors are possible using SslClientStream
+			Console.WriteLine ("\tError: {0}", errors);
+		}
+		// whatever the reason we do not stop the SSL connection
+		return true;
 	}
 
 	private static bool CertificateValidation (X509Certificate certificate, int[] certificateErrors)
