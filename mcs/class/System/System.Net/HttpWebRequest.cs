@@ -1571,7 +1571,7 @@ namespace System.Net
 		}
 
 		// Returns true if redirected
-		(bool, bool, BufferOffsetSize, WebException) CheckFinalStatus (HttpWebResponse response)
+		(bool redirect, bool mustReadAll, BufferOffsetSize writeBuffer, WebException throwMe) CheckFinalStatus (HttpWebResponse response)
 		{
 			WebException throwMe = null;
 
