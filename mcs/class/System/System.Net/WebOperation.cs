@@ -329,7 +329,7 @@ namespace System.Net
 				requestWrittenTask.TrySetResult (stream);
 		}
 
-		internal void CompleteResponseRead (WebResponseStream stream, bool ok, Exception error = null)
+		internal void CompleteResponseRead (bool ok, Exception error = null)
 		{
 			WebConnection.Debug ($"WO COMPLETE RESPONSE READ: Op={ID} {ok} {error?.GetType ()}");
 

@@ -171,7 +171,7 @@ namespace System.Net
 				}
 
 				closed = true;
-				Operation.CompleteResponseRead (this, false, throwMe);
+				Operation.CompleteResponseRead (false, throwMe);
 				throw throwMe;
 			}
 
@@ -396,7 +396,7 @@ namespace System.Net
 						contentLength = 0;
 					nextReadCalled = true;
 				}
-				Operation.CompleteResponseRead (this, true);
+				Operation.CompleteResponseRead (true);
 			}
 		}
 
@@ -406,7 +406,7 @@ namespace System.Net
 			if (read_eof || totalRead >= contentLength || nextReadCalled) {
 				if (!nextReadCalled) {
 					nextReadCalled = true;
-					Operation.CompleteResponseRead (this, true);
+					Operation.CompleteResponseRead (true);
 				}
 				return;
 			}
@@ -494,7 +494,7 @@ namespace System.Net
 				readTcs = null;
 			}
 
-			Operation.CompleteResponseRead (this, true);
+			Operation.CompleteResponseRead (true);
 		}
 
 		public override Task WriteAsync (byte[] buffer, int offset, int size, CancellationToken cancellationToken)
@@ -509,12 +509,12 @@ namespace System.Net
 				nextReadCalled = true;
 				if (totalRead >= contentLength) {
 					disposed = true;
-					Operation.CompleteResponseRead (this, true);
+					Operation.CompleteResponseRead (true);
 				} else {
 					// If we have not read all the contents
 					closed = true;
 					disposed = true;
-					Operation.CompleteResponseRead (this, false);
+					Operation.CompleteResponseRead (false);
 				}
 			}
 		}

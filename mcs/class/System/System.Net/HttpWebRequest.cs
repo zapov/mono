@@ -1073,7 +1073,7 @@ namespace System.Net
 				try {
 					if (mustReadAll)
 						await stream.ReadAllAsync (cancellationToken).ConfigureAwait (false);
-					operation.CompleteResponseRead (stream, true);
+					operation.CompleteResponseRead (true);
 					response.Close ();
 				} catch (Exception e) {
 					throwMe = GetWebException (e);
