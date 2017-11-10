@@ -263,9 +263,9 @@ namespace System.Net
 				requestTask.TrySetResult (requestStream);
 
 				var stream = new WebResponseStream (requestStream);
+				responseStream = stream;
 
 				await stream.InitReadAsync (cts.Token).ConfigureAwait (false);
-				responseStream = stream;
 
 				responseTask.TrySetResult (stream);
 			} catch (OperationCanceledException) {
