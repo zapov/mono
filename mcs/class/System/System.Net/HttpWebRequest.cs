@@ -1583,11 +1583,13 @@ namespace System.Net
 			if ((!auth_state.IsCompleted && code == HttpStatusCode.Unauthorized && credentials != null) ||
 				(ProxyQuery && !proxy_auth_state.IsCompleted && code == HttpStatusCode.ProxyAuthenticationRequired)) {
 				if (!usedPreAuth && CheckAuthorization (response, code)) {
+					mustReadAll = true;
+
 					// Keep the written body, so it can be rewritten in the retry
 					if (MethodWithBuffer) {
 						if (AllowWriteStreamBuffering) {
 							var buffer = writeStream.GetWriteBuffer ();
-							return (true, false, buffer, null);
+							return (true, mustReadAll, buffer, null);
 						}
 
 						//
@@ -1599,15 +1601,15 @@ namespace System.Net
 								ResendContentFactory (ms);
 								var buffer = ms.ToArray ();
 								var bos = new BufferOffsetSize (buffer, 0, buffer.Length, false);
-								return (true, false, bos, null);
+								return (true, mustReadAll, bos, null);
 							}
 						}
 					} else if (method != "PUT" && method != "POST") {
-						return (true, false, null, null);
+						return (true, mustReadAll, null, null);
 					}
 
 					if (!ThrowOnError)
-						return (false, false, null, null);
+						return (false, mustReadAll, null, null);
 
 					writeStream.InternalClose ();
 					writeStream = null;
@@ -1616,7 +1618,7 @@ namespace System.Net
 					throwMe = new WebException ("This request requires buffering " +
 					                            "of data for authentication or " +
 					                            "redirection to be sucessful.");
-					return (false, false, null, throwMe);
+					return (false, mustReadAll, null, throwMe);
 				}
 			}
 
