@@ -182,9 +182,11 @@ namespace System.Net
 			}
 
 			if (totalRead >= contentLength && !nextReadCalled) {
-				WebConnection.Debug ($"{ME} READ ASYNC - READ ALL: {oldBytes} {nbytes}");
-				await ReadAllAsync (cancellationToken).ConfigureAwait (false);
-				WebConnection.Debug ($"{ME} READ ASYNC - READ ALL DONE: {oldBytes} {nbytes}");
+				WebConnection.Debug ($"{ME} READ ASYNC - READ COMPLETE: {oldBytes} {nbytes} - {totalRead} {contentLength} {nextReadCalled}");
+				if (!nextReadCalled) {
+					nextReadCalled = true;
+					Operation.CompleteResponseRead (true);
+				}
 			}
 
 			return oldBytes + nbytes;
