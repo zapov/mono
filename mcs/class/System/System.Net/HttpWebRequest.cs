@@ -1585,27 +1585,27 @@ namespace System.Net
 				if (!usedPreAuth && CheckAuthorization (response, code)) {
 					mustReadAll = true;
 
-					// Keep the written body, so it can be rewritten in the retry
-					if (MethodWithBuffer) {
-						if (AllowWriteStreamBuffering) {
-							var buffer = writeStream.GetWriteBuffer ();
-							return (true, mustReadAll, buffer, null);
-						}
-
-						//
-						// Buffering is not allowed but we have alternative way to get same content (we
-						// need to resent it due to NTLM Authentication).
-						//
-						if (ResendContentFactory != null) {
-							using (var ms = new MemoryStream ()) {
-								ResendContentFactory (ms);
-								var buffer = ms.ToArray ();
-								var bos = new BufferOffsetSize (buffer, 0, buffer.Length, false);
-								return (true, mustReadAll, bos, null);
-							}
-						}
-					} else if (method != "PUT" && method != "POST") {
+					// HEAD, GET, MKCOL, CONNECT, TRACE
+					if (!MethodWithBuffer)
 						return (true, mustReadAll, null, null);
+
+					// Keep the written body, so it can be rewritten in the retry
+					if (AllowWriteStreamBuffering) {
+						var buffer = writeStream.GetWriteBuffer ();
+						return (true, mustReadAll, buffer, null);
+					}
+
+					//
+					// Buffering is not allowed but we have alternative way to get same content (we
+					// need to resent it due to NTLM Authentication).
+					//
+					if (ResendContentFactory != null) {
+						using (var ms = new MemoryStream ()) {
+							ResendContentFactory (ms);
+							var buffer = ms.ToArray ();
+							var bos = new BufferOffsetSize (buffer, 0, buffer.Length, false);
+							return (true, mustReadAll, bos, null);
+						}
 					}
 
 					if (!ThrowOnError)
