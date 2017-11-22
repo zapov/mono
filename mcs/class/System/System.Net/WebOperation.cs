@@ -324,7 +324,7 @@ namespace System.Net
 			WebConnection.Debug ($"WO COMPLETE REQUEST WRITTEN: Op={ID} {error != null}");
 
 			if (error != null)
-				requestWrittenTask.TrySetException (error);
+				SetError (error);
 			else
 				requestWrittenTask.TrySetResult (stream);
 		}
