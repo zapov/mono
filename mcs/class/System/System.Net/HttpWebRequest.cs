@@ -1679,6 +1679,9 @@ namespace System.Net
 					return (b, mustReadAll, rewriteHandler, null);
 			}
 
+			if (!ThrowOnError)
+				return (false, mustReadAll, null, null);
+
 			if (writeStream != null) {
 				writeStream.InternalClose ();
 				writeStream = null;
