@@ -75,31 +75,31 @@ namespace System.Net
 			ServicePoint = sPoint;
 		}
 
-#if MARTIN_WEB_DEBUG
+#if MONO_WEB_DEBUG
 		internal static bool EnableWebDebug {
 			get; set;
 		}
 
 		static WebConnection ()
 		{
-			if (Environment.GetEnvironmentVariable ("MARTIN_WEB_DEBUG") != null)
+			if (Environment.GetEnvironmentVariable ("MONO_WEB_DEBUG") != null)
 				EnableWebDebug = true;
 		}
 #endif
 
-		[Conditional ("MARTIN_WEB_DEBUG")]
+		[Conditional ("MONO_WEB_DEBUG")]
 		internal static void Debug (string message, params object[] args)
 		{
-#if MARTIN_WEB_DEBUG
+#if MONO_WEB_DEBUG
 			if (EnableWebDebug)
 				Console.Error.WriteLine (string.Format (message, args));
 #endif
 		}
 
-		[Conditional ("MARTIN_WEB_DEBUG")]
+		[Conditional ("MONO_WEB_DEBUG")]
 		internal static void Debug (string message)
 		{
-#if MARTIN_WEB_DEBUG
+#if MONO_WEB_DEBUG
 			if (EnableWebDebug)
 				Console.Error.WriteLine (message);
 #endif
@@ -180,14 +180,21 @@ namespace System.Net
 			throw GetException (WebExceptionStatus.ConnectFailure, null);
 		}
 
+#if MONO_WEB_DEBUG
 		static int nextID, nextRequestID;
-		public readonly int id = ++nextID;
-
+		readonly int id = ++nextID;
 		public int ID => disposed != 0 ? -id : id;
+#else
+		internal readonly int ID;
+#endif
 
 		async Task<bool> CreateStream (WebOperation operation, bool reused, CancellationToken cancellationToken)
 		{
+#if MONO_WEB_DEBUG
 			var requestID = ++nextRequestID;
+#else
+			var requestID = 0;
+#endif
 
 			try {
 				var stream = new NetworkStream (socket, false);

@@ -97,7 +97,6 @@ namespace System.Net
 		WebRequestStream writeStream;
 		HttpWebResponse webResponse;
 		TaskCompletionSource<HttpWebResponse> responseTask;
-		int nestedRequestStream;
 		WebOperation currentOperation;
 		int aborted;
 		bool gotRequestStream;
@@ -198,8 +197,12 @@ namespace System.Net
 			ResetAuthorization ();
 		}
 
+#if MONO_WEB_DEBUG
 		static int nextId;
 		internal readonly int ID = ++nextId;
+#else
+		internal readonly int ID;
+#endif
 
 		void ResetAuthorization ()
 		{
@@ -860,12 +863,7 @@ namespace System.Net
 			}
 		}
 
-		Task<Stream> MyGetRequestStreamAsync ()
-		{
-			return RunWithTimeout (MyGetRequestStreamAsync);
-		}
-
-		async Task<Stream> MyGetRequestStreamAsync (Task timeoutTask, CancellationToken cancellationToken)
+		async Task<Stream> MyGetRequestStreamAsync (CancellationToken cancellationToken)
 		{
 			if (Aborted)
 				throw CreateRequestAbortedException ();
@@ -888,26 +886,15 @@ namespace System.Net
 					throw new InvalidOperationException ("The operation cannot be performed once the request has been submitted.");
 
 				operation = currentOperation;
-				if (operation != null && operation.WriteStream != null)
-					return operation.WriteStream;
-
-				if (Interlocked.CompareExchange (ref nestedRequestStream, 1, 0) != 0)
-					throw new InvalidOperationException ("Cannot re-call start of asynchronous " +
-								"method while a previous call is still in progress.");
-
-				initialMethod = method;
-
 				if (operation == null) {
+					initialMethod = method;
+
 					gotRequestStream = true;
 					operation = SendRequest (false, null, cancellationToken);
 				}
 			}
 
-			try {
-				return await operation.GetRequestStream ().ConfigureAwait (false);
-			} finally {
-				nestedRequestStream = 0;
-			}
+			return await operation.GetRequestStream ().ConfigureAwait (false);
 		}
 
 		public override IAsyncResult BeginGetRequestStream (AsyncCallback callback, object state)
@@ -915,7 +902,7 @@ namespace System.Net
 			if (Aborted)
 				throw CreateRequestAbortedException ();
 
-			return TaskToApm.Begin (MyGetRequestStreamAsync (), callback, state);
+			return TaskToApm.Begin (RunWithTimeout (MyGetRequestStreamAsync), callback, state);
 		}
 
 		public override Stream EndGetRequestStream (IAsyncResult asyncResult)
@@ -945,13 +932,13 @@ namespace System.Net
 			throw new NotImplementedException ();
 		}
 
-		internal static async Task<T> RunWithTimeout<T> (Func<Task, CancellationToken, Task<T>> func, int timeout, Action abort)
+		internal static async Task<T> RunWithTimeout<T> (Func<CancellationToken, Task<T>> func, int timeout, Action abort)
 		{
 			using (var cts = new CancellationTokenSource ()) {
 				cts.CancelAfter (timeout);
 				cts.Token.Register (() => abort ());
 				var timeoutTask = Task.Delay (timeout);
-				var workerTask = func (timeoutTask, cts.Token);
+				var workerTask = func (cts.Token);
 				var ret = await Task.WhenAny (workerTask, timeoutTask).ConfigureAwait (false);
 				if (ret == timeoutTask)
 					throw new WebException (SR.net_timeout, WebExceptionStatus.Timeout);
@@ -959,17 +946,12 @@ namespace System.Net
 			}
 		}
 
-		Task<T> RunWithTimeout<T> (Func<Task, CancellationToken, Task<T>> func)
+		Task<T> RunWithTimeout<T> (Func<CancellationToken, Task<T>> func)
 		{
 			return RunWithTimeout (func, timeout, Abort);
 		}
 
-		Task<HttpWebResponse> MyGetResponseAsync ()
-		{
-			return RunWithTimeout (MyGetResponseAsync);
-		}
-
-		async Task<HttpWebResponse> MyGetResponseAsync (Task timeoutTask, CancellationToken cancellationToken)
+		async Task<HttpWebResponse> MyGetResponseAsync (CancellationToken cancellationToken)
 		{
 			if (Aborted)
 				throw CreateRequestAbortedException ();
@@ -1017,26 +999,10 @@ namespace System.Net
 
 					WebConnection.Debug ($"HWR GET RESPONSE LOOP: Req={ID} {auth_state.NtlmAuthState}");
 
-					var writeStreamTask = operation.GetRequestStream ();
-
-					var anyTask = await Task.WhenAny (timeoutTask, writeStreamTask).ConfigureAwait (false);
-					if (anyTask == timeoutTask) {
-						Abort ();
-						throw new WebException ("The request timed out", WebExceptionStatus.Timeout);
-					}
-
-					writeStream = writeStreamTask.Result;
+					writeStream = await operation.GetRequestStream ();
 					await writeStream.WriteRequestAsync (cancellationToken).ConfigureAwait (false);
 
-					var responseStreamTask = operation.GetResponseStream ();
-
-					anyTask = await Task.WhenAny (timeoutTask, responseStreamTask).ConfigureAwait (false);
-					if (anyTask == timeoutTask) {
-						Abort ();
-						throw new WebException ("The request timed out", WebExceptionStatus.Timeout);
-					}
-
-					stream = responseStreamTask.Result;
+					stream = await operation.GetResponseStream ();
 
 					WebConnection.Debug ($"HWR RESPONSE LOOP #0: Req={ID} - {stream?.Headers != null}");
 
@@ -1190,7 +1156,7 @@ namespace System.Net
 			if (Aborted)
 				throw CreateRequestAbortedException ();
 
-			return TaskToApm.Begin (MyGetResponseAsync (), callback, state);
+			return TaskToApm.Begin (RunWithTimeout (MyGetResponseAsync), callback, state);
 		}
 
 		public override WebResponse EndGetResponse (IAsyncResult asyncResult)

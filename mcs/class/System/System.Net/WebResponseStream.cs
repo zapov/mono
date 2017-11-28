@@ -75,16 +75,17 @@ namespace System.Net
 			private set;
 		}
 
-		internal string ME {
-			get;
-		}
+		internal readonly string ME;
 
 		public WebResponseStream (WebRequestStream request)
 			: base (request.Connection, request.Operation, request.InnerStream)
 		{
 			RequestStream = request;
-			ME = $"WRP(Cnc={Connection.ID}, Op={Operation.ID})";
 			request.InnerStream.ReadTimeout = ReadTimeout;
+
+#if MONO_WEB_DEBUG
+			ME = $"WRP(Cnc={Connection.ID}, Op={Operation.ID})";
+#endif
 		}
 
 		public override long Length {
@@ -105,17 +106,6 @@ namespace System.Net
 		protected MonoChunkStream ChunkStream {
 			get;
 			private set;
-		}
-
-		Task<T> RunWithTimeout<T> (Func<Task, CancellationToken, Task<T>> func)
-		{
-			return HttpWebRequest.RunWithTimeout (func, ReadTimeout, () => Abort ());
-		}
-
-		void Abort ()
-		{
-			Operation.Abort ();
-			InnerStream.Dispose ();
 		}
 
 		public override async Task<int> ReadAsync (byte[] buffer, int offset, int size, CancellationToken cancellationToken)
@@ -155,8 +145,9 @@ namespace System.Net
 
 			try {
 				// FIXME: NetworkStream.ReadAsync() does not support cancellation.
-				(oldBytes, nbytes) = await RunWithTimeout (
-					(timeout, ct) => ProcessRead (buffer, offset, size, ct)).ConfigureAwait (false);
+				(oldBytes, nbytes) = await HttpWebRequest.RunWithTimeout (
+					ct => ProcessRead (buffer, offset, size, ct),
+					ReadTimeout, () => Abort ()).ConfigureAwait (false);
 			} catch (Exception e) {
 				throwMe = GetReadException (WebExceptionStatus.ReceiveFailure, e, "ReadAsync");
 			}
@@ -190,6 +181,12 @@ namespace System.Net
 			}
 
 			return oldBytes + nbytes;
+
+			void Abort ()
+			{
+				Operation.Abort ();
+				InnerStream.Dispose ();
+			}
 		}
 
 		async Task<(int, int)> ProcessRead (byte[] buffer, int offset, int size, CancellationToken cancellationToken)

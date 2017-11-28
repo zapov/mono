@@ -57,8 +57,12 @@ namespace System.Net
 			get;
 		}
 
+#if MONO_WEB_DEBUG
 		static int nextID;
-		public readonly int ID = ++nextID;
+		internal readonly int ID = ++nextID;
+#else
+		internal readonly int ID;
+#endif
 
 		public WebOperation (HttpWebRequest request, BufferOffsetSize writeBuffer, bool isNtlmChallenge, CancellationToken cancellationToken)
 		{
@@ -183,11 +187,12 @@ namespace System.Net
 
 		internal void RegisterRequest (ServicePoint servicePoint, WebConnection connection)
 		{
+			if (servicePoint == null)
+				throw new ArgumentNullException (nameof (servicePoint));
+			if (connection == null)
+				throw new ArgumentNullException (nameof (connection));
+
 			lock (this) {
-				if (servicePoint == null)
-					throw new ArgumentNullException (nameof (servicePoint));
-				if (connection == null)
-					throw new ArgumentNullException (nameof (connection));
 				if (Interlocked.CompareExchange (ref requestSent, 1, 0) != 0)
 					throw new InvalidOperationException ("Invalid nested call.");
 				ServicePoint = servicePoint;
